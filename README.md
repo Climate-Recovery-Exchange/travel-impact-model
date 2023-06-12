@@ -1,26 +1,28 @@
-## Travel Impact Model 1.5.0
+## Travel Impact Model 1.7.0
 
 #### (Implementation of the Travalyst Shared Framework by Google)
 
 ## Table of contents
-* [Background](#background)
-* [Model overview](#model-overview)
-    * [Flight level emission estimates](#flight-level-emission-estimates)
-        * [Flight level CO<sub>2</sub> estimates](#flight-level-co2-estimates)
-        * [Data sources](#data-sources)
-    * [Breakdown from flight level to individual level](#breakdown-from-flight-level-to-individual-level)
-        * [Data sources](#data-sources-1)
-        * [Factors details](#factors-details)
-        * [Outlier detection and basic correctness checking](#outlier-detection-and-basic-correctness-checking)
-* [Example emission estimation](#example-emission-estimation)
-* [Legal base for model data sharing](#legal-base-for-model-data-sharing)
-* [Versioning](#versioning)
-* [Limitations](#limitations)
-* [Data quality](#data-quality)
-* [Contact](#contact)
-* [Glossary](#glossary)
-* [Appendix](#appendix)
-    * [Appendix A: Aircraft type support](#appendix-a-aircraft-type-support)
+
+*   [Background](#background)
+*   [Model overview](#model-overview)
+    *   [Flight level emission estimates](#flight-level-emission-estimates)
+        *   [Flight level CO<sub>2</sub> estimates](#flight-level-co2-estimates)
+        *   [Data sources](#data-sources)
+    *   [Breakdown from flight level to individual level](#breakdown-from-flight-level-to-individual-level)
+        *   [Data sources](#data-sources-1)
+        *   [Outlier detection and basic correctness checking](#outlier-detection-and-basic-correctness-checking)
+        *   [Factors details](#factors-details)
+*   [Example emission estimation](#example-emission-estimation)
+*   [Legal base for model data sharing](#legal-base-for-model-data-sharing)
+*   [Versioning](#versioning)
+*   [Changelog](#changelog)
+*   [Limitations](#limitations)
+*   [Data quality](#data-quality)
+*   [Contact](#contact)
+*   [Glossary](#glossary)
+*   [Appendix](#appendix)
+    *   [Appendix A: Aircraft type support](#appendix-a-aircraft-type-support)
 
 ## Background
 
@@ -57,18 +59,18 @@ There are several resources about the EEA model available:
     [documentation](https://www.eurocontrol.int/sites/default/files/content/documents/201807-european-aviation-fuel-burn-emissions-system-eea-v2.pdf)
     on pre-work for the EEA model
 
+Additionally, the Travel Impact Model replaces the EEA model’s jet fuel combustion to CO<sub>2</sub> conversion factor with the [CORSIA methodology’s](https://www.icao.int/environmental-protection/CORSIA/Documents/CORSIA_Eligible_Fuels/CORSIA_Supporting_Document_CORSIA%20Eligible%20Fuels_LCA_Methodology_V5.pdf) recommended conversion factor.
+
 The EEA model takes the efficiency of the aircraft into account. As shown in
 Figure 1, a typical flight is modeled in two stages: *take off and landing*
 (LTO, yellow) and *cruise, climb, and descend* (CCD, blue).
 
-![alt_text](images/image1.png "image_tooltip")
+![alt_text](images/image3.png "image_tooltip")
 
 <p style="text-align: right">
 (Fig 1)</p>
 
-For each stage, there are aircraft-specific and distance-specific CO<sub>2</sub>
-emission estimates based on the fuel burn of the aircraft. Table 1 shows an
-example emissions forecast for a B789 aircraft:
+For each stage, there are aircraft-specific and distance-specific fuel burn estimates. Table 1 shows an example fuel burn forecast for a Boeing 787-9 (B789) aircraft:
 
 <table>
   <tr>
@@ -76,10 +78,9 @@ example emissions forecast for a B789 aircraft:
    </td>
    <td style="background-color: null"><code>Distance (nm)</code>
    </td>
-   <td style="background-color: null"><code>LTO CO<sub>2 </sub>forecast<sub> </sub>(kg)</code>
+   <td style="background-color: null"><code>LTO fuel forecast (kg)</code>
    </td>
-   <td style="background-color: null"><code>CCD CO<sub>2 
-</sub>forecast<sub> </sub>(kg)</code>
+   <td style="background-color: null"><code>CCD fuel forecast (kg)</code>
    </td>
   </tr>
   <tr>
@@ -87,9 +88,9 @@ example emissions forecast for a B789 aircraft:
    </td>
    <td style="background-color: null"><code>500</code>
    </td>
-   <td style="background-color: null"><code>5'439</code>
+   <td style="background-color: null"><code>1,727</code>
    </td>
-   <td style="background-color: null"><code> 18'318</code>
+   <td style="background-color: null"><code>5,815</code>
    </td>
   </tr>
   <tr>
@@ -97,9 +98,9 @@ example emissions forecast for a B789 aircraft:
    </td>
    <td style="background-color: null"><code>1000</code>
    </td>
-   <td style="background-color: null"><code>5'439</code>
+   <td style="background-color: null"><code>1,727</code>
    </td>
-   <td style="background-color: null"><code> 33'925</code>
+   <td style="background-color: null"><code>10,770</code>
    </td>
   </tr>
   <tr>
@@ -117,9 +118,9 @@ example emissions forecast for a B789 aircraft:
    </td>
    <td style="background-color: null"><code>5000</code>
    </td>
-   <td style="background-color: null"><code>5'439</code>
+   <td style="background-color: null"><code>1,727</code>
    </td>
-   <td style="background-color: null"><code>164'982</code>
+   <td style="background-color: null"><code>52,375</code>
    </td>
   </tr>
   <tr>
@@ -127,9 +128,9 @@ example emissions forecast for a B789 aircraft:
    </td>
    <td style="background-color: null"><code>5500</code>
    </td>
-   <td style="background-color: null"><code>5'439</code>
+   <td style="background-color: null"><code>1,727</code>
    </td>
-   <td style="background-color: null"><code>180'903</code>
+   <td style="background-color: null"><code>57,430</code>
    </td>
   </tr>
 </table>
@@ -141,14 +142,11 @@ By using these numbers together with linear interpolation or extrapolation, it
 is possible to deduce the emission estimate for flights of any length on
 supported aircraft:
 
-*   Interpolation is used for flights that are in between two distance data
-    points. As a theoretical example, a 5250 nautical miles flight on a Boeing
-    787-9 will emit 172778.5 kg of CO<sub>2</sub> during the CCD phase (where
-    172778.5 equals 164827 + (180730 - 164827)/2 and figures for 5000nm and
-    5500nm entries were taken from Table 1).
+*   Interpolation is used for flights that are in between two distance data points. As a theoretical example, a 5250 nautical miles flight on a Boeing 787-9 will burn approximately 54902.5 kg of fuel during the CCD phase (where 54902.5 equals 52375 + (57430 - 52375)/2, with figures for 5000nm and 5500nm taken from Table 1).
 *   Extrapolation is used for flights that are either shorter than the smallest
     supported distance, or longer than the longest supported distance for that
     aircraft type.
+* The CORSIA jet fuel combustion to CO<sub>2</sub> conversion factor of 3.1672 kg CO<sub>2</sub> / kg of jet fuel burnt is then applied to calculate the total CO<sub>2</sub> emitted.
 
 There is information for most commonly-used aircraft types in the EEA data, but
 some are missing. For missing aircraft types, one of the following alternatives
@@ -184,6 +182,7 @@ Used for flight level emissions:
 *   EEA Report No 13/2019 1.A.3.a Aviation 1 Master emissions calculator 2019
     ([link](https://www.eea.europa.eu/publications/emep-eea-guidebook-2019/part-b-sectoral-guidance-chapters/1-energy/1-a-combustion/1-a-3-a-aviation-1/view))
 *   Piano-X aircraft database ([link](https://www.lissys.uk/PianoX.html))
+* CORSIA Eligible Fuels Life Cycle Assessment Methodology ([link](https://www.icao.int/environmental-protection/CORSIA/Documents/CORSIA_Eligible_Fuels/CORSIA_Supporting_Document_CORSIA%20Eligible%20Fuels_LCA_Methodology_V5.pdf))
 
 ### Breakdown from flight level to individual level
 
@@ -212,6 +211,38 @@ Used to determine seating configuration and calculate emissions per available
 seat:
 
 *   Aircraft Configuration/Version (ACV) from published flight schedules
+*   Fleet-level aircraft configuration information from the "Seats (Equipment
+    Configuration) File" provided by [OAG](https://oag.com)
+
+#### Primary fallback for missing seat configuration
+
+If there are no individual seat configuration numbers for a flight available
+from the published flight schedules, we query the fleet-level seating data for a
+unique match by carrier and aircraft. This is only possible in cases where a
+carrier uses the same seating configuration for all their aircraft of a certain
+aircraft model.
+
+#### Outlier detection and basic correctness checking
+
+If there are no individual seat configuration numbers for a flight available
+from the published flight schedules, nor from the fleet-level data, or if they
+are incorrectly formatted or implausible, the TIM uses aircraft-specific medians
+derived from the overall dataset instead. Basic correctness checks based on
+reference seat configurations for the aircraft are performed, specifically:
+
+*   The *calculated total seat area* for a flight is the total available seating
+    area. This is calculated based on seating data and seating class factors.
+    For example, the total seat area for a wide-body aircraft would be:
+    *   `1.0 * num_economy_class_seats +`
+        <br/>`1.5 * num_premium_economy_class_seats +`
+        <br/>`4.0 * num_business_class_seats +`
+        <br/>`5.0 * num_first_class_seats`
+*   The *reference total seat area* for an aircraft is roughly the median total
+    seat area.
+*   During a *comparison* step: If the *calculated total seat area* for a given
+    flight is within certain boundaries of the reference for that aircraft, the
+    filed seating data from published flight schedules is used. Otherwise the
+    *reference total seat area* is used.
 
 #### Factors details
 
@@ -233,36 +264,56 @@ configurations confirmed the accuracy of these factors.
 
 **Load factors**
 
-Load factors are derived from a projection of past passenger statistics from
-2019 U.S. data average
-([source](https://fred.stlouisfed.org/series/LOADFACTOR)):
+Passenger load factors are predicted based on historical passenger statistics.
+TIM uses a tiered approach to determine passenger load factors. High resolution,
+specific data (i.e. by route) is preferred where available, and in the absence
+of more granular data the model falls back to a generic value (i.e. global
+default) only when no suitable high resolution options are available.
 
-*   Passenger load follows a seasonal pattern with low in Jan (~79.3%) and high
-    in June (~89.8%)
-    *   Aggregated overall average applied in the model is **84.5%**
-*   Cargo load not included
+Tier 1: Highly specific passenger load factors
 
-#### Outlier detection and basic correctness checking
+*   For flights within, to, and from the United States, TIM uses historical data
+    provided by the
+    [U.S. Department of Transportation Bureau of Transportation Statistics](https://www.bts.gov/airline-data-downloads).
 
-If there are no individual seat configuration numbers for a flight available
-from the published flight schedules, or if they are incorrectly formatted or
-implausible, the TIM uses aircraft-specific medians derived from the overall
-dataset instead. Basic correctness checks based on reference seat configurations
-for the aircraft are performed, specifically:
+    *   Where data is available for a given carrier, route, and month of travel,
+        use the average passenger load factor over the last 6 years.
+    *   Where data is available for the given carrier and month of travel, but
+        not the specific route, use the average passenger load factor across all
+        routes over the last 6 years.
+    *   If fewer than three years of data are available for averaging, we do not
+        calculate an average, and fallback to the approach described below
+        instead.
 
-*   The *calculated total seat area* for a flight is the total available seating
-    area. This is calculated based on seating data and seating class factors.
-    For example, the total seat area for a wide-body aircraft would be:
-    *   ``1.0 * num_economy_class_seats +``
-        <br/>``1.5 * num_premium_economy_class_seats +``
-        <br/>``4.0 * num_business_class_seats +``
-        <br/>``5.0 * num_first_class_seats``
-*   The *reference total seat area* for an aircraft is roughly the median total
-    seat area.
-*   During a *comparison* step: If the *calculated total seat area* for a given
-    flight is within certain boundaries of the reference for that aircraft, the
-    filed seating data from published flight schedules is used. Otherwise the
-    *reference total seat area* is used.
+Tier 2: Global default passenger load factor
+
+*   For all other flights for which an equivalent public-domain dataset with
+    similar granularity is not currently available, TIM falls back to use a load
+    factor value of **84.5%**. This value is derived from
+    [historical data for the U.S.](https://fred.stlouisfed.org/series/LOADFACTOR)
+    from 2019.
+*   An analysis of load factors sourced from publically available airline
+    investor reports indicates that this value is a good approximation for the
+    passenger load factor globally.
+
+Cargo load factors are not included.
+
+**Load factor data source specifics**
+
+T-100 from
+[U.S. Department of Transportation Bureau of Transportation Statistics](https://www.bts.gov/airline-data-downloads)
+
+*   Only data from the last six years is used.
+*   Data is updated on a monthly basis (TIM version number will not increase).
+*   Any month of data for which the overall load factor (aggregated over all
+    airlines and routes) differs more than 20% from the average load factor over
+    the last 10 years is removed as an outlier month. March 2020 - February 2021
+    (inclusive) are removed from the data as a result.
+*   To account for patterns of seasonality that do not correspond with the exact
+    month of travel (e.g. public holidays), the previous and next month are
+    taken into account for the average load factor of any given month of travel.
+    E.g. For future flights in March, we aggregate over all flights in February,
+    March, and April.
 
 ## Example emission estimation
 
@@ -278,16 +329,16 @@ Let’s consider the following flight parameters:
 
 To get the total emissions for a flight, let’s follow the process below:
 
-1.  Calculate great circle distance between ZRH and SFO: 9369 km (= 5058.855
-    nautical miles)
-2.  Look up the static LTO numbers and the distance based CCD number from
-    aircraft performance data (see Table 1), and interpolate CO<sub>2</sub> for
-    a 9369 km long flight:
-    *   LTO 5.43 metric tons of CO<sub>2</sub>
-    *   CCD 166.87 metric tons of CO<sub>2</sub> calculated
-        *   165.0 + (5058.9 - 5000) \* (180.9 -165.0) / (5500 - 5000)
-3.  Sum LTO and CCD number for total flight level result:
-    *   166.87 + 5.43 = 172.3 metric tons of CO<sub>2</sub>
+1. Calculate great circle distance between ZRH and SFO: 9369 km (= 5058.9 nautical miles)
+2. Look up the static LTO numbers and the distance-based CCD number from aircraft performance data (see Table 1), and interpolate fuel burnt for a 9369 km long flight:
+  * LTO 1727 kg of fuel burnt 
+  * CCD 52970 kg of fuel burnt calculated
+     * 52375 kg + (5058.9 - 5000) * (57430 kg - 52375 kg) / (5500 - 5000) = 52970 kg
+3. Sum LTO and CCD number for total flight-level result:
+  * 1727 kg + 52970 kg = 54697 kg of fuel burnt 
+4. Convert from fuel burnt to CO<sub>2</sub> emissions for total flight-level result:
+  * 54697 kg * 3.1672 = 173236 kg of CO<sub>2</sub>
+
 
 Once the total flight emissions are computed, let’s compute the per passenger
 break down:
@@ -300,19 +351,16 @@ break down:
     \* business\_class\_multiplier + …
     *   In this specific example, the estimated area is: \
         0 \* 5 + 48 \* 4 + 1.5 \* 21 + 188 \* 1 = 411.5
-3.  Divide the total CO<sub>2</sub> emissions by the equivalent capacity
-    calculated above to get the of CO<sub>2</sub> emissions per-economy
-    passenger: 172.3 t CO<sub>2</sub>/411.5 = 418.71 kg CO<sub>2</sub>
-4.  Emissions per-passenger for other cabins can be derived by multiplying for
-    the corresponding cabin factor.
-    *   Business: 418.71 \* 4 = 1674.85 kg CO<sub>2</sub>
-    *   Premium Economy: 418.71 \* 1.5 = 628.06 kg CO<sub>2</sub>
-    *   Economy = 418.71kg CO<sub>2</sub>
-5.  Scale to estimated load factor 0.845 by apportioning emissions to occupied
-    seats:
-    *   Business: 1674.85 / 0.845 = 1982.067 kg CO<sub>2</sub>
-    *   Premium Economy: 628.06 / 0.845 = 743.28 kg CO<sub>2</sub>
-    *   Economy = 418.71 / 0.845 = 495.52 kg CO<sub>2</sub>
+3. Divide the total CO<sub>2</sub> emissions by the equivalent capacity calculated above to get the of CO<sub>2</sub> emissions per-economy passenger: 173236 kg CO<sub>2</sub> / 411.5 = 420.99 kg CO<sub>2</sub>
+4. Emissions per-passenger for other cabins can be derived by multiplying for the corresponding cabin factor.
+  * Business: 420.99 * 4 = 1683.96 kg CO<sub>2</sub>
+  * Premium Economy: 420.99 * 1.5 = 631.49 kg CO<sub>2</sub>
+  * Economy = 420.99 kg CO<sub>2</sub>
+5. Scale to estimated load factor 0.845 by apportioning emissions to occupied seats:
+  * Business: 1683.96 / 0.845 = 1992.85 kg CO<sub>2</sub>
+  * Premium Economy: 631.49 / 0.845 = 747.33 kg CO<sub>2</sub>
+  * Economy = 420.99 / 0.845 = 498.21 kg CO<sub>2</sub>
+
 
 ## Legal base for model data sharing
 
@@ -341,6 +389,52 @@ A full model version will have four components: **MAJOR.MINOR.PATCH.DATE**, e.g.
     inaccuracies in the model implementation.
 *   **Dated versions**: Model datasets are recreated with refreshed input data
     but no change to the algorithms regularly.
+
+## Changelog
+
+### 1.7.0
+
+Updating the jet fuel combustion to CO<sub>2</sub> conversion factor from 3.15 based on the EEA methodology to 3.1672 to align with the [CORSIA methodology’s](https://www.icao.int/environmental-protection/CORSIA/Documents/CORSIA_Eligible_Fuels/CORSIA_Supporting_Document_CORSIA%20Eligible%20Fuels_LCA_Methodology_V5.pdf) recommended factor.
+
+### 1.6.0
+
+Adding carrier and route specific passenger load factors for flights from, to,
+and within the U.S., taking seasonality patterns into account. We are using data
+from the
+[U.S. Department of Transportation Bureau of Transportation Statistics](https://www.bts.gov/).
+For more details, see the [section on load factors](#factors-details).
+
+### 1.5.1
+
+Adding a fleet-level source for seating configuration data. For airlines that
+don't file seating configuration information in flight schedules but use the
+same seating configuration for all their aircraft of a certain model, a fall
+back to the "Seats (Equipment Configuration) File" provided by OAG is performed.
+
+### 1.5.0
+
+Following recent discussions with academic and industry partners, we are
+adjusting the TIM to focus on CO2 emissions. While we strongly believe in
+including non-CO2 effects in the model long-term, the details of how and when to
+include these factors requires more input from our stakeholders as part of a
+governance model that’s in development. With this change, we are provisionally
+removing contrails effects from our CO2e estimates but will keep the labeling as
+“CO2e” in the model to ensure future compatibility.
+
+We believe CO2e factors are critical to include in the model, given the emphasis
+on them in the IPCC’s AR6 report. We want to make sure that when we do
+incorporate them into the model, we have a strong plan to account for time of
+day and regional variations in contrails’ warming impact. We are committed to
+providing consumers the most accurate information as they make informed choices
+about their travel options.
+
+We continue to invest into research and collaborate with leading scientists,
+NGOs, and partners to better incorporate contrails and other non-GHG impact into
+our model, and we look forward to sharing updates at a later date.
+
+### 1.4.0
+
+Initial public version of the Travel Impact Model.
 
 ## Limitations
 
@@ -384,11 +478,6 @@ not supported.
 **Greenhouse gases:** Greenhouse gases other than CO<sub>2</sub> are not
 included.
 
-**Passenger load factors:** The same default load factor is used for every
-flight instead of including seasonal, regional, and airline level factors.
-
-This simplifying assumption was introduced during Covid-19 pandemic times.
-
 **Seat configurations:** If there are no seat configurations individual numbers
 for a flight available from published flight schedules, or if they are
 incorrectly formatted or implausible, aircraft specific medians derived from the
@@ -413,8 +502,8 @@ We are welcoming feedback and enquiries. Please get in touch using this
 
 ## Glossary
 
-**CCD:** The flight phases _Climb_, _Cruise_, _and_ _Descend_ occur above a flight
-altitude of 3,000 feet.
+**CCD:** The flight phases *Climb*, *Cruise*, *and* *Descend* occur above a
+flight altitude of 3,000 feet.
 
 **CO<sub>2</sub>**: Carbon dioxide is the most significant long-lived greenhouse
 gas in Earth's atmosphere. Since the Industrial Revolution anthropogenic
@@ -425,6 +514,8 @@ increased its concentration in the atmosphere, leading to global warming.
 look like thin strands. There are natural cirrus clouds, and also contrail
 induced cirrus clouds that under certain conditions occur as the result of a
 contrail formation from aircraft engine exhaust.
+
+**CORSIA**: Carbon Offsetting and Reduction Scheme for International Aviation, a carbon offset and reduction scheme to curb the aviation impact on climate change developed by the International Civil Aviation Organization.
 
 **Radiative Forcing (RF):** Radiative Forcing is the instantaneous difference in
 radiative energy flux stemming from a climate perturbation, measured at the top
@@ -466,1595 +557,163 @@ years.
 
 ### Appendix A: Aircraft type support
 
-<table>
-  <tr>
-   <td style="background-color: null"><strong>IATA aircraft code</strong>
-   </td>
-   <td style="background-color: null"><strong>Aircraft full name</strong>
-   </td>
-   <td style="background-color: null"><strong>Mapping (ICAO aircraft code)</strong>
-   </td>
-   <td style="background-color: null"><strong>Support status</strong>
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">100
-   </td>
-   <td style="background-color: null">Fokker 100
-   </td>
-   <td style="background-color: null">F100
-   </td>
-   <td style="background-color: null">Direct match in EEA
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">146
-   </td>
-   <td style="background-color: null">British Aerospace 146
-   </td>
-   <td style="background-color: null">BAE146
-   </td>
-   <td style="background-color: null">Direct match in EEA
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">221
-   </td>
-   <td style="background-color: null">Airbus A220-100
-   </td>
-   <td style="background-color: null">
-   </td>
-   <td style="background-color: null">Supported via correction factor derived from Piano data
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">223
-   </td>
-   <td style="background-color: null">Airbus A220-300
-   </td>
-   <td style="background-color: null">
-   </td>
-   <td style="background-color: null">Supported via correction factor derived from Piano data
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">290
-   </td>
-   <td style="background-color: null">Embraer 190 E2
-   </td>
-   <td style="background-color: null">E190
-   </td>
-   <td style="background-color: null">Mapped onto older model
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">295
-   </td>
-   <td style="background-color: null">Embraer 195 E2
-   </td>
-   <td style="background-color: null">E195
-   </td>
-   <td style="background-color: null">Mapped onto older model
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">310
-   </td>
-   <td style="background-color: null">Airbus A310
-   </td>
-   <td style="background-color: null">A310
-   </td>
-   <td style="background-color: null">Direct match in EEA
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">313
-   </td>
-   <td style="background-color: null">Airbus A310-300
-   </td>
-   <td style="background-color: null">A310
-   </td>
-   <td style="background-color: null">Direct match in EEA
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">318
-   </td>
-   <td style="background-color: null">Airbus A318
-   </td>
-   <td style="background-color: null">A318
-   </td>
-   <td style="background-color: null">Direct match in EEA
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">319
-   </td>
-   <td style="background-color: null">Airbus A319
-   </td>
-   <td style="background-color: null">A319
-   </td>
-   <td style="background-color: null">Direct match in EEA
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">320
-   </td>
-   <td style="background-color: null">Airbus A320-100/200
-   </td>
-   <td style="background-color: null">A320
-   </td>
-   <td style="background-color: null">Direct match in EEA
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">321
-   </td>
-   <td style="background-color: null">Airbus A321
-   </td>
-   <td style="background-color: null">A321
-   </td>
-   <td style="background-color: null">Direct match in EEA
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">330
-   </td>
-   <td style="background-color: null">Airbus A330
-   </td>
-   <td style="background-color: null">A332
-   </td>
-   <td style="background-color: null">Mapped to least efficient in family
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">332
-   </td>
-   <td style="background-color: null">Airbus A330-200
-   </td>
-   <td style="background-color: null">A332
-   </td>
-   <td style="background-color: null">Direct match in EEA
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">333
-   </td>
-   <td style="background-color: null">Airbus A330-300
-   </td>
-   <td style="background-color: null">A333
-   </td>
-   <td style="background-color: null">Direct match in EEA
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">339
-   </td>
-   <td style="background-color: null">Airbus A330-900neo
-   </td>
-   <td style="background-color: null">A333
-   </td>
-   <td style="background-color: null">Supported via correction factor derived from Piano data
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">340
-   </td>
-   <td style="background-color: null">Airbus A340
-   </td>
-   <td style="background-color: null">A345
-   </td>
-   <td style="background-color: null">Mapped to least efficient in family
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">343
-   </td>
-   <td style="background-color: null">Airbus A340-300
-   </td>
-   <td style="background-color: null">A343
-   </td>
-   <td style="background-color: null">Direct match in EEA
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">345
-   </td>
-   <td style="background-color: null">Airbus A340-500
-   </td>
-   <td style="background-color: null">A345
-   </td>
-   <td style="background-color: null">Direct match in EEA
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">346
-   </td>
-   <td style="background-color: null">Airbus A340-600
-   </td>
-   <td style="background-color: null">A346
-   </td>
-   <td style="background-color: null">Direct match in EEA
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">350
-   </td>
-   <td style="background-color: null">Airbus A350
-   </td>
-   <td style="background-color: null">A350
-   </td>
-   <td style="background-color: null">Mapped to least efficient in family
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">351
-   </td>
-   <td style="background-color: null">Airbus Industrie A350-1000
-   </td>
-   <td style="background-color: null">A350
-   </td>
-   <td style="background-color: null">Supported via correction factor derived from Piano data
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">359
-   </td>
-   <td style="background-color: null">Airbus A350-900
-   </td>
-   <td style="background-color: null">A350
-   </td>
-   <td style="background-color: null">Direct match in EEA
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">380
-   </td>
-   <td style="background-color: null">Airbus A380
-   </td>
-   <td style="background-color: null">A380
-   </td>
-   <td style="background-color: null">Mapped to least efficient in family
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">388
-   </td>
-   <td style="background-color: null">Airbus A380-800
-   </td>
-   <td style="background-color: null">A380
-   </td>
-   <td style="background-color: null">Direct match in EEA
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">717
-   </td>
-   <td style="background-color: null">Boeing 717-200
-   </td>
-   <td style="background-color: null">B717
-   </td>
-   <td style="background-color: null">Direct match in EEA
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">732
-   </td>
-   <td style="background-color: null">Boeing 737-200
-   </td>
-   <td style="background-color: null">B732
-   </td>
-   <td style="background-color: null">Direct match in EEA
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">733
-   </td>
-   <td style="background-color: null">Boeing 737-300
-   </td>
-   <td style="background-color: null">B733
-   </td>
-   <td style="background-color: null">Direct match in EEA
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">734
-   </td>
-   <td style="background-color: null">Boeing 737-400
-   </td>
-   <td style="background-color: null">B734
-   </td>
-   <td style="background-color: null">Direct match in EEA
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">735
-   </td>
-   <td style="background-color: null">Boeing 737-500
-   </td>
-   <td style="background-color: null">B735
-   </td>
-   <td style="background-color: null">Direct match in EEA
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">736
-   </td>
-   <td style="background-color: null">Boeing 737-600
-   </td>
-   <td style="background-color: null">B736
-   </td>
-   <td style="background-color: null">Direct match in EEA
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">737
-   </td>
-   <td style="background-color: null">Boeing 737
-   </td>
-   <td style="background-color: null">B734
-   </td>
-   <td style="background-color: null">Mapped to least efficient in family
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">738
-   </td>
-   <td style="background-color: null">Boeing 737-800
-   </td>
-   <td style="background-color: null">B738
-   </td>
-   <td style="background-color: null">Direct match in EEA
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">739
-   </td>
-   <td style="background-color: null">Boeing 737-900
-   </td>
-   <td style="background-color: null">B739
-   </td>
-   <td style="background-color: null">Direct match in EEA
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">744
-   </td>
-   <td style="background-color: null">Boeing 747-400
-   </td>
-   <td style="background-color: null">B744
-   </td>
-   <td style="background-color: null">Direct match in EEA
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">747
-   </td>
-   <td style="background-color: null">Boeing 747
-   </td>
-   <td style="background-color: null">B744
-   </td>
-   <td style="background-color: null">Mapped to least efficient in family
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">752
-   </td>
-   <td style="background-color: null">Boeing 757-200
-   </td>
-   <td style="background-color: null">B752
-   </td>
-   <td style="background-color: null">Direct match in EEA
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">753
-   </td>
-   <td style="background-color: null">Boeing 757-300
-   </td>
-   <td style="background-color: null">B753
-   </td>
-   <td style="background-color: null">Direct match in EEA
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">757
-   </td>
-   <td style="background-color: null">Boeing 757
-   </td>
-   <td style="background-color: null">B753
-   </td>
-   <td style="background-color: null">Mapped to least efficient in family
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">762
-   </td>
-   <td style="background-color: null">Boeing 767-200
-   </td>
-   <td style="background-color: null">B762
-   </td>
-   <td style="background-color: null">Direct match in EEA
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">763
-   </td>
-   <td style="background-color: null">Boeing 767-300
-   </td>
-   <td style="background-color: null">B763
-   </td>
-   <td style="background-color: null">Direct match in EEA
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">764
-   </td>
-   <td style="background-color: null">Boeing 767-400
-   </td>
-   <td style="background-color: null">B764
-   </td>
-   <td style="background-color: null">Direct match in EEA
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">767
-   </td>
-   <td style="background-color: null">Boeing 767
-   </td>
-   <td style="background-color: null">B764
-   </td>
-   <td style="background-color: null">Mapped to least efficient in family
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">772
-   </td>
-   <td style="background-color: null">Boeing 777-200/200ER
-   </td>
-   <td style="background-color: null">B772
-   </td>
-   <td style="background-color: null">Direct match in EEA
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">773
-   </td>
-   <td style="background-color: null">Boeing 777-300
-   </td>
-   <td style="background-color: null">B773
-   </td>
-   <td style="background-color: null">Direct match in EEA
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">777
-   </td>
-   <td style="background-color: null">Boeing 777
-   </td>
-   <td style="background-color: null">B773
-   </td>
-   <td style="background-color: null">Mapped to least efficient in family
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">781
-   </td>
-   <td style="background-color: null">Boeing 787-10
-   </td>
-   <td style="background-color: null">
-   </td>
-   <td style="background-color: null">Supported via correction factor derived from Piano data
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">787
-   </td>
-   <td style="background-color: null">Boeing 787
-   </td>
-   <td style="background-color: null">B789
-   </td>
-   <td style="background-color: null">Mapped to least efficient in family
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">788
-   </td>
-   <td style="background-color: null">Boeing 787-8
-   </td>
-   <td style="background-color: null">B788
-   </td>
-   <td style="background-color: null">Direct match in EEA
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">789
-   </td>
-   <td style="background-color: null">Boeing 787-9
-   </td>
-   <td style="background-color: null">B789
-   </td>
-   <td style="background-color: null">Direct match in EEA
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">32A
-   </td>
-   <td style="background-color: null">Airbus Industrie A320 (Sharklets)
-   </td>
-   <td style="background-color: null">
-   </td>
-   <td style="background-color: null">Supported via correction factor derived from Piano data
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">32B
-   </td>
-   <td style="background-color: null">Airbus Industrie A321 (Sharklets)
-   </td>
-   <td style="background-color: null">
-   </td>
-   <td style="background-color: null">Supported via correction factor derived from Piano data
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">32N
-   </td>
-   <td style="background-color: null">Airbus A320neo
-   </td>
-   <td style="background-color: null">
-   </td>
-   <td style="background-color: null">Supported via correction factor derived from Piano data
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">32Q
-   </td>
-   <td style="background-color: null">Airbus A321neo
-   </td>
-   <td style="background-color: null">
-   </td>
-   <td style="background-color: null">Supported via correction factor derived from Piano data
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">32S
-   </td>
-   <td style="background-color: null">Airbus A318/A319/A320/A321
-   </td>
-   <td style="background-color: null">A321
-   </td>
-   <td style="background-color: null">Mapped to least efficient in family
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">73C
-   </td>
-   <td style="background-color: null">Boeing 737-300 (winglets)
-   </td>
-   <td style="background-color: null">B733
-   </td>
-   <td style="background-color: null">Mapped to non-optimized aircraft
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">73E
-   </td>
-   <td style="background-color: null">Boeing 737-500 (winglets)
-   </td>
-   <td style="background-color: null">B735
-   </td>
-   <td style="background-color: null">Mapped to non-optimized aircraft
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">73F
-   </td>
-   <td style="background-color: null">Boeing 737 Freighter
-   </td>
-   <td style="background-color: null">B734
-   </td>
-   <td style="background-color: null">Mapped to least efficient in family
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">73G
-   </td>
-   <td style="background-color: null">Boeing 737-700
-   </td>
-   <td style="background-color: null">B737
-   </td>
-   <td style="background-color: null">Direct match in EEA
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">73H
-   </td>
-   <td style="background-color: null">Boeing 737-800 (winglets)
-   </td>
-   <td style="background-color: null">
-   </td>
-   <td style="background-color: null">Supported via correction factor derived from Piano data
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">73J
-   </td>
-   <td style="background-color: null">Boeing 737-900 (winglets)
-   </td>
-   <td style="background-color: null">B739
-   </td>
-   <td style="background-color: null">Mapped to non-optimized aircraft
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">73M
-   </td>
-   <td style="background-color: null">Boeing 737-200
-   </td>
-   <td style="background-color: null">B732
-   </td>
-   <td style="background-color: null">Direct match in EEA
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">73N
-   </td>
-   <td style="background-color: null">Boeing 737-300
-   </td>
-   <td style="background-color: null">B733
-   </td>
-   <td style="background-color: null">Direct match in EEA
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">73Q
-   </td>
-   <td style="background-color: null">Boeing 737-400
-   </td>
-   <td style="background-color: null">B734
-   </td>
-   <td style="background-color: null">Direct match in EEA
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">73S
-   </td>
-   <td style="background-color: null">Boeing 737-200/200 Advanced
-   </td>
-   <td style="background-color: null">B732
-   </td>
-   <td style="background-color: null">Direct match in EEA
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">73W
-   </td>
-   <td style="background-color: null">Boeing 737-700 (winglets)
-   </td>
-   <td style="background-color: null">
-   </td>
-   <td style="background-color: null">Supported via correction factor derived from Piano data
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">74E
-   </td>
-   <td style="background-color: null">Boeing 747-400 Mixed
-   </td>
-   <td style="background-color: null">B744
-   </td>
-   <td style="background-color: null">Direct match in EEA
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">74F
-   </td>
-   <td style="background-color: null">Boeing 747 Freighter
-   </td>
-   <td style="background-color: null">B744
-   </td>
-   <td style="background-color: null">Mapped to least efficient in family
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">74H
-   </td>
-   <td style="background-color: null">Boeing 747-8I
-   </td>
-   <td style="background-color: null">B744
-   </td>
-   <td style="background-color: null">Mapped onto older model
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">74N
-   </td>
-   <td style="background-color: null">Boeing 747-8F (Freighter)
-   </td>
-   <td style="background-color: null">B744
-   </td>
-   <td style="background-color: null">Mapped onto older model
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">74Y
-   </td>
-   <td style="background-color: null">Boeing 747-400F Freighter
-   </td>
-   <td style="background-color: null">B744
-   </td>
-   <td style="background-color: null">Direct match in EEA
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">75T
-   </td>
-   <td style="background-color: null">Boeing 757-300 (winglets)
-   </td>
-   <td style="background-color: null">B753
-   </td>
-   <td style="background-color: null">Mapped to non-optimized aircraft
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">75W
-   </td>
-   <td style="background-color: null">Boeing 757-200 (winglets)
-   </td>
-   <td style="background-color: null">
-   </td>
-   <td style="background-color: null">Supported via correction factor derived from Piano data
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">76W
-   </td>
-   <td style="background-color: null">Boeing 767-300 (winglets)
-   </td>
-   <td style="background-color: null">
-   </td>
-   <td style="background-color: null">Supported via correction factor derived from Piano data
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">77F
-   </td>
-   <td style="background-color: null">Boeing 777 Freighter
-   </td>
-   <td style="background-color: null">B773
-   </td>
-   <td style="background-color: null">Mapped to least efficient in family
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">77L
-   </td>
-   <td style="background-color: null">Boeing 777-200LR
-   </td>
-   <td style="background-color: null">B772
-   </td>
-   <td style="background-color: null">Mapped to similar model
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">77W
-   </td>
-   <td style="background-color: null">Boeing 777-300ER
-   </td>
-   <td style="background-color: null">B77W
-   </td>
-   <td style="background-color: null">Direct match in EEA
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">77X
-   </td>
-   <td style="background-color: null">Boeing 777-200F Freighter
-   </td>
-   <td style="background-color: null">B772
-   </td>
-   <td style="background-color: null">Direct match in EEA
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">7M8
-   </td>
-   <td style="background-color: null">Boeing 737MAX 8
-   </td>
-   <td style="background-color: null">
-   </td>
-   <td style="background-color: null">Supported via correction factor derived from Piano data
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">7M9
-   </td>
-   <td style="background-color: null">Boeing 737MAX 9
-   </td>
-   <td style="background-color: null">
-   </td>
-   <td style="background-color: null">Supported via correction factor derived from Piano data
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">7S8
-   </td>
-   <td style="background-color: null">Boeing 737-800 (Scimitar Winglets)
-   </td>
-   <td style="background-color: null">
-   </td>
-   <td style="background-color: null">Supported via correction factor derived from Piano data
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">A32
-   </td>
-   <td style="background-color: null">Antonov AN-32
-   </td>
-   <td style="background-color: null">AN32
-   </td>
-   <td style="background-color: null">Direct match in EEA
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">A81
-   </td>
-   <td style="background-color: null">Antonov AN-148-100
-   </td>
-   <td style="background-color: null">AN148
-   </td>
-   <td style="background-color: null">Direct match in EEA
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">AB4
-   </td>
-   <td style="background-color: null">Airbus A300B2/B4/C4
-   </td>
-   <td style="background-color: null">A30B
-   </td>
-   <td style="background-color: null">Direct match in EEA
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">AB6
-   </td>
-   <td style="background-color: null">Airbus A300-600/600C
-   </td>
-   <td style="background-color: null">A306
-   </td>
-   <td style="background-color: null">Direct match in EEA
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">ABY
-   </td>
-   <td style="background-color: null">Airbus A300-600 Freighter
-   </td>
-   <td style="background-color: null">A306
-   </td>
-   <td style="background-color: null">Direct match in EEA
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">AN4
-   </td>
-   <td style="background-color: null">Antonov AN-24
-   </td>
-   <td style="background-color: null">AN24
-   </td>
-   <td style="background-color: null">Direct match in EEA
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">AN6
-   </td>
-   <td style="background-color: null">Antonov AN-26/30/32
-   </td>
-   <td style="background-color: null">AN32
-   </td>
-   <td style="background-color: null">Mapped to least efficient in family
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">AR1
-   </td>
-   <td style="background-color: null">Avro Regional Jet RJ100 Avroliner
-   </td>
-   <td style="background-color: null">
-   </td>
-   <td style="background-color: null">Not supported
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">AR8
-   </td>
-   <td style="background-color: null">Avro Regional Jet RJ85 Avroliner
-   </td>
-   <td style="background-color: null">
-   </td>
-   <td style="background-color: null">Not supported
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">ARJ
-   </td>
-   <td style="background-color: null">Avro Regional Jet Avroliner
-   </td>
-   <td style="background-color: null">
-   </td>
-   <td style="background-color: null">Not supported
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">AT4
-   </td>
-   <td style="background-color: null">ATR 42-300/320
-   </td>
-   <td style="background-color: null">ATR42
-   </td>
-   <td style="background-color: null">Mapped to similar model
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">AT5
-   </td>
-   <td style="background-color: null">ATR 42-500
-   </td>
-   <td style="background-color: null">ATR42
-   </td>
-   <td style="background-color: null">Direct match in EEA
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">AT7
-   </td>
-   <td style="background-color: null">ATR 72
-   </td>
-   <td style="background-color: null">ATR72
-   </td>
-   <td style="background-color: null">Direct match in EEA
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">ATR
-   </td>
-   <td style="background-color: null">ATR 42/ATR 72
-   </td>
-   <td style="background-color: null">ATR72
-   </td>
-   <td style="background-color: null">Mapped to least efficient in family
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">BE1
-   </td>
-   <td style="background-color: null">Beechcraft 1900
-   </td>
-   <td style="background-color: null">
-   </td>
-   <td style="background-color: null">Not supported
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">BE9
-   </td>
-   <td style="background-color: null">Beechcraft C99 Airliner
-   </td>
-   <td style="background-color: null">
-   </td>
-   <td style="background-color: null">Not supported
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">BEH
-   </td>
-   <td style="background-color: null">Beechcraft 1900D
-   </td>
-   <td style="background-color: null">
-   </td>
-   <td style="background-color: null">Not supported
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">BES
-   </td>
-   <td style="background-color: null">Beechcraft 1900/1900C
-   </td>
-   <td style="background-color: null">
-   </td>
-   <td style="background-color: null">Not supported
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">BET
-   </td>
-   <td style="background-color: null">Beechcraft Light Aircraft twin engine
-   </td>
-   <td style="background-color: null">
-   </td>
-   <td style="background-color: null">Not supported
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">BNI
-   </td>
-   <td style="background-color: null">Pilatus Brit-Norm BN-2A/B ISL/BN-2T
-   </td>
-   <td style="background-color: null">
-   </td>
-   <td style="background-color: null">Not supported
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">C27
-   </td>
-   <td style="background-color: null">Comac ARJ21-700
-   </td>
-   <td style="background-color: null">
-   </td>
-   <td style="background-color: null">Not supported
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">CNA
-   </td>
-   <td style="background-color: null">Cessna (Light Aircraft)
-   </td>
-   <td style="background-color: null">C208
-   </td>
-   <td style="background-color: null">Direct match in EEA
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">CNC
-   </td>
-   <td style="background-color: null">Cessna (Light Aircraft - single engine)
-   </td>
-   <td style="background-color: null">C208
-   </td>
-   <td style="background-color: null">Direct match in EEA
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">CNF
-   </td>
-   <td style="background-color: null">Cessna 208B Freighter
-   </td>
-   <td style="background-color: null">C208
-   </td>
-   <td style="background-color: null">Direct match in EEA
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">CNJ
-   </td>
-   <td style="background-color: null">Cessna Citation
-   </td>
-   <td style="background-color: null">C500
-   </td>
-   <td style="background-color: null">Direct match in EEA
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">CR1
-   </td>
-   <td style="background-color: null">Canadair Regional Jet 100
-   </td>
-   <td style="background-color: null">
-   </td>
-   <td style="background-color: null">Not supported
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">CR2
-   </td>
-   <td style="background-color: null">Canadair Regional Jet 200
-   </td>
-   <td style="background-color: null">
-   </td>
-   <td style="background-color: null">Not supported
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">CR5
-   </td>
-   <td style="background-color: null">Canadair Regional Jet 550
-   </td>
-   <td style="background-color: null">
-   </td>
-   <td style="background-color: null">Supported via correction factor derived from Piano data
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">CR7
-   </td>
-   <td style="background-color: null">Canadair Regional Jet 700
-   </td>
-   <td style="background-color: null">CS700RJ
-   </td>
-   <td style="background-color: null">Direct match in EEA
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">CR9
-   </td>
-   <td style="background-color: null">Canadair Regional Jet 900
-   </td>
-   <td style="background-color: null">CS900RJ
-   </td>
-   <td style="background-color: null">Direct match in EEA
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">CRJ
-   </td>
-   <td style="background-color: null">Canadair Regional Jet
-   </td>
-   <td style="background-color: null">CS900RJ
-   </td>
-   <td style="background-color: null">Mapped to least efficient in family
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">CRK
-   </td>
-   <td style="background-color: null">Canadair Regional Jet 1000
-   </td>
-   <td style="background-color: null">
-   </td>
-   <td style="background-color: null">Not supported
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">CS1
-   </td>
-   <td style="background-color: null">Bombardier CS100
-   </td>
-   <td style="background-color: null">
-   </td>
-   <td style="background-color: null">Not supported
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">CS3
-   </td>
-   <td style="background-color: null">Bombardier CS300
-   </td>
-   <td style="background-color: null">
-   </td>
-   <td style="background-color: null">Not supported
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">CVF
-   </td>
-   <td style="background-color: null">Convair 440/580/600/640 Freighter
-   </td>
-   <td style="background-color: null">
-   </td>
-   <td style="background-color: null">Not supported
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">DH2
-   </td>
-   <td style="background-color: null">De Havilland-Bombardier DHC-8 Dash 8 Series 200
-   </td>
-   <td style="background-color: null">DHC8
-   </td>
-   <td style="background-color: null">Mapped to non-optimized aircraft
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">DH3
-   </td>
-   <td style="background-color: null">De Havilland-Bombardier DHC-8 Dash 8 Series 300
-   </td>
-   <td style="background-color: null">DHC8
-   </td>
-   <td style="background-color: null">Mapped to non-optimized aircraft
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">DH4
-   </td>
-   <td style="background-color: null">De Havilland-Bombardier DHC-8 Dash 8 Series 400
-   </td>
-   <td style="background-color: null">DHC8
-   </td>
-   <td style="background-color: null">Mapped to non-optimized aircraft
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">DH8
-   </td>
-   <td style="background-color: null">De Havilland-Bombardier DHC-8 Dash 8
-   </td>
-   <td style="background-color: null">DHC8
-   </td>
-   <td style="background-color: null">Direct match in EEA
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">DHC
-   </td>
-   <td style="background-color: null">De Havilland-Bombardier DHC-4 Caribou
-   </td>
-   <td style="background-color: null">
-   </td>
-   <td style="background-color: null">Not supported
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">DHT
-   </td>
-   <td style="background-color: null">De Havilland-Bombardier DHC-6 Twin Otter
-   </td>
-   <td style="background-color: null">DHC6
-   </td>
-   <td style="background-color: null">Direct match in EEA
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">E70
-   </td>
-   <td style="background-color: null">Embraer 170 Regional Jet
-   </td>
-   <td style="background-color: null">E170
-   </td>
-   <td style="background-color: null">Direct match in EEA
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">E75
-   </td>
-   <td style="background-color: null">Embraer 175 Regional Jet
-   </td>
-   <td style="background-color: null">E175
-   </td>
-   <td style="background-color: null">Direct match in EEA
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">E7W
-   </td>
-   <td style="background-color: null">Embraer 175 (Enhanced Winglets)
-   </td>
-   <td style="background-color: null">
-   </td>
-   <td style="background-color: null">Supported via correction factor derived from Piano data
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">E90
-   </td>
-   <td style="background-color: null">Embraer 190 Regional Jet
-   </td>
-   <td style="background-color: null">E190
-   </td>
-   <td style="background-color: null">Direct match in EEA
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">E95
-   </td>
-   <td style="background-color: null">Embraer 195 Regional Jet
-   </td>
-   <td style="background-color: null">E195
-   </td>
-   <td style="background-color: null">Direct match in EEA
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">EM2
-   </td>
-   <td style="background-color: null">Embraer EMB-120 Brasilia
-   </td>
-   <td style="background-color: null">E120
-   </td>
-   <td style="background-color: null">Direct match in EEA
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">EMB
-   </td>
-   <td style="background-color: null">Embraer EMB-110 Bandeirante
-   </td>
-   <td style="background-color: null">E110
-   </td>
-   <td style="background-color: null">Direct match in EEA
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">EMJ
-   </td>
-   <td style="background-color: null">Embraer RJ-170/175/190/195 Regional Jet
-   </td>
-   <td style="background-color: null">
-   </td>
-   <td style="background-color: null">Mapped to least efficient in family
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">ER3
-   </td>
-   <td style="background-color: null">Embraer ERJ-135 Regional Jet
-   </td>
-   <td style="background-color: null">E135
-   </td>
-   <td style="background-color: null">Direct match in EEA
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">ER4
-   </td>
-   <td style="background-color: null">Embraer ERJ-145 Regional Jet
-   </td>
-   <td style="background-color: null">E145
-   </td>
-   <td style="background-color: null">Direct match in EEA
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">ERD
-   </td>
-   <td style="background-color: null">Embraer ERJ-140 Regional Jet
-   </td>
-   <td style="background-color: null">E145
-   </td>
-   <td style="background-color: null">Direct match in EEA
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">ERJ
-   </td>
-   <td style="background-color: null">Embraer ERJ-135/140/145 Regional Jet
-   </td>
-   <td style="background-color: null">
-   </td>
-   <td style="background-color: null">Mapped to least efficient in family
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">F50
-   </td>
-   <td style="background-color: null">Fokker 50
-   </td>
-   <td style="background-color: null">F50
-   </td>
-   <td style="background-color: null">Direct match in EEA
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">F70
-   </td>
-   <td style="background-color: null">Fokker 70
-   </td>
-   <td style="background-color: null">F70
-   </td>
-   <td style="background-color: null">Direct match in EEA
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">FRJ
-   </td>
-   <td style="background-color: null">Fairchild Dornier 328JET
-   </td>
-   <td style="background-color: null">
-   </td>
-   <td style="background-color: null">Not supported
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">IL7
-   </td>
-   <td style="background-color: null">Ilyushin IL-76
-   </td>
-   <td style="background-color: null">IL76
-   </td>
-   <td style="background-color: null">Direct match in EEA
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">IL9
-   </td>
-   <td style="background-color: null">Ilyushin IL-96-300
-   </td>
-   <td style="background-color: null">IL96
-   </td>
-   <td style="background-color: null">Direct match in EEA
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">J32
-   </td>
-   <td style="background-color: null">British Aerospace Jetstream 32
-   </td>
-   <td style="background-color: null">
-   </td>
-   <td style="background-color: null">Not supported
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">J41
-   </td>
-   <td style="background-color: null">British Aerospace Jetstream 41
-   </td>
-   <td style="background-color: null">
-   </td>
-   <td style="background-color: null">Not supported
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">JST
-   </td>
-   <td style="background-color: null">British Aerospace Jetstream 31/32/41
-   </td>
-   <td style="background-color: null">
-   </td>
-   <td style="background-color: null">Not supported
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">L4T
-   </td>
-   <td style="background-color: null">LET L410 Turbolet
-   </td>
-   <td style="background-color: null">L410
-   </td>
-   <td style="background-color: null">Direct match in EEA
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">M1F
-   </td>
-   <td style="background-color: null">McDonnell Douglas MD-11 Freighter
-   </td>
-   <td style="background-color: null">MD11
-   </td>
-   <td style="background-color: null">Direct match in EEA
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">M80
-   </td>
-   <td style="background-color: null">McDonnell Douglas MD-80
-   </td>
-   <td style="background-color: null">
-   </td>
-   <td style="background-color: null">Not supported
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">M83
-   </td>
-   <td style="background-color: null">McDonnell Douglas MD-83
-   </td>
-   <td style="background-color: null">
-   </td>
-   <td style="background-color: null">Not supported
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">M87
-   </td>
-   <td style="background-color: null">McDonnell Douglas MD-87
-   </td>
-   <td style="background-color: null">
-   </td>
-   <td style="background-color: null">Not supported
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">M88
-   </td>
-   <td style="background-color: null">McDonnell Douglas MD-88
-   </td>
-   <td style="background-color: null">
-   </td>
-   <td style="background-color: null">Not supported
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">M90
-   </td>
-   <td style="background-color: null">McDonnell Douglas MD-90
-   </td>
-   <td style="background-color: null">MD90
-   </td>
-   <td style="background-color: null">Direct match in EEA
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">MA6
-   </td>
-   <td style="background-color: null">Xian Yunshuji MA-60
-   </td>
-   <td style="background-color: null">
-   </td>
-   <td style="background-color: null">Not supported
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">S20
-   </td>
-   <td style="background-color: null">SAAB 2000
-   </td>
-   <td style="background-color: null">
-   </td>
-   <td style="background-color: null">Not supported
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">SF3
-   </td>
-   <td style="background-color: null">SAAB SF 340
-   </td>
-   <td style="background-color: null">
-   </td>
-   <td style="background-color: null">Not supported
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">SFB
-   </td>
-   <td style="background-color: null">Saab 340B
-   </td>
-   <td style="background-color: null">
-   </td>
-   <td style="background-color: null">Not supported
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">SU9
-   </td>
-   <td style="background-color: null">Sukhoi Superjet 100-95
-   </td>
-   <td style="background-color: null">
-   </td>
-   <td style="background-color: null">Not supported
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">SWM
-   </td>
-   <td style="background-color: null">Fairchild (Swearingen) Metro/Merlin
-   </td>
-   <td style="background-color: null">
-   </td>
-   <td style="background-color: null">Not supported
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">TU5
-   </td>
-   <td style="background-color: null">Tupolev TU-154
-   </td>
-   <td style="background-color: null">
-   </td>
-   <td style="background-color: null">Not supported
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">YK2
-   </td>
-   <td style="background-color: null">Yakovlev YAK-42
-   </td>
-   <td style="background-color: null">
-   </td>
-   <td style="background-color: null">Not supported
-   </td>
-  </tr>
-  <tr>
-   <td style="background-color: null">YK4
-   </td>
-   <td style="background-color: null">Yakovlev YAK-40
-   </td>
-   <td style="background-color: null">
-   </td>
-   <td style="background-color: null">Not supported
-   </td>
-  </tr>
-</table>
+| Aircraft full name                              | IATA aircraft code | Mapping (ICAO aircraft code) | Support status                                          |
+| ----------------------------------------------- | ------------------ | ---------------------------- | ------------------------------------------------------- |
+| Airbus A220-100                                 | 221                |                              | Supported via correction factor derived from Piano data |
+| Airbus A220-300                                 | 223                |                              | Supported via correction factor derived from Piano data |
+| Airbus A300-600 Freighter                       | ABY                | A306                         | Direct match in EEA                                     |
+| Airbus A300-600/600C                            | AB6                | A306                         | Direct match in EEA                                     |
+| Airbus A300B2/B4/C4                             | AB4                | A30B                         | Direct match in EEA                                     |
+| Airbus A310                                     | 310                | A310                         | Direct match in EEA                                     |
+| Airbus A310-300                                 | 313                | A310                         | Direct match in EEA                                     |
+| Airbus A318                                     | 318                | A318                         | Direct match in EEA                                     |
+| Airbus A318/A319/A320/A321                      | 32S                | A321                         | Mapped to least efficient in family                     |
+| Airbus A319                                     | 319                | A319                         | Direct match in EEA                                     |
+| Airbus A320-100/200                             | 320                | A320                         | Direct match in EEA                                     |
+| Airbus A320neo                                  | 32N                |                              | Supported via correction factor derived from Piano data |
+| Airbus A321                                     | 321                | A321                         | Direct match in EEA                                     |
+| Airbus A321neo                                  | 32Q                |                              | Supported via correction factor derived from Piano data |
+| Airbus A330                                     | 330                | A332                         | Mapped to least efficient in family                     |
+| Airbus A330-200                                 | 332                | A332                         | Direct match in EEA                                     |
+| Airbus A330-300                                 | 333                | A333                         | Direct match in EEA                                     |
+| Airbus A330-900neo                              | 339                | A333                         | Supported via correction factor derived from Piano data |
+| Airbus A340                                     | 340                | A345                         | Mapped to least efficient in family                     |
+| Airbus A340-300                                 | 343                | A343                         | Direct match in EEA                                     |
+| Airbus A340-500                                 | 345                | A345                         | Direct match in EEA                                     |
+| Airbus A340-600                                 | 346                | A346                         | Direct match in EEA                                     |
+| Airbus A350                                     | 350                | A350                         | Mapped to least efficient in family                     |
+| Airbus A350-900                                 | 359                | A350                         | Direct match in EEA                                     |
+| Airbus A380                                     | 380                | A380                         | Mapped to least efficient in family                     |
+| Airbus A380-800                                 | 388                | A380                         | Direct match in EEA                                     |
+| Airbus A320 (Sharklets)                         | 32A                |                              | Supported via correction factor derived from Piano data |
+| Airbus A321 (Sharklets)                         | 32B                |                              | Supported via correction factor derived from Piano data |
+| Airbus A350-1000                                | 351                | A350                         | Supported via correction factor derived from Piano data |
+| Antonov AN-148-100                              | A81                | AN148                        | Direct match in EEA                                     |
+| Antonov AN-24                                   | AN4                | AN24                         | Direct match in EEA                                     |
+| Antonov AN-26/30/32                             | AN6                | AN32                         | Mapped to least efficient in family                     |
+| Antonov AN-32                                   | A32                | AN32                         | Direct match in EEA                                     |
+| ATR 42-300/320                                  | AT4                | ATR42                        | Mapped to similar model                                 |
+| ATR 42-500                                      | AT5                | ATR42                        | Direct match in EEA                                     |
+| ATR 42/ATR 72                                   | ATR                | ATR72                        | Mapped to least efficient in family                     |
+| ATR 72                                          | AT7                | ATR72                        | Direct match in EEA                                     |
+| Avro Regional Jet Avroliner                     | ARJ                |                              | Not supported                                           |
+| Avro Regional Jet RJ100 Avroliner               | AR1                |                              | Not supported                                           |
+| Avro Regional Jet RJ85 Avroliner                | AR8                |                              | Not supported                                           |
+| Beechcraft 1900                                 | BE1                |                              | Not supported                                           |
+| Beechcraft 1900/1900C                           | BES                |                              | Not supported                                           |
+| Beechcraft 1900D                                | BEH                |                              | Not supported                                           |
+| Beechcraft C99 Airliner                         | BE9                |                              | Not supported                                           |
+| Beechcraft Light Aircraft twin engine           | BET                |                              | Not supported                                           |
+| Boeing 717-200                                  | 717                | B717                         | Direct match in EEA                                     |
+| Boeing 737                                      | 737                | B734                         | Mapped to least efficient in family                     |
+| Boeing 737 Freighter                            | 73F                | B734                         | Mapped to least efficient in family                     |
+| Boeing 737-200                                  | 732                | B732                         | Direct match in EEA                                     |
+| Boeing 737-200                                  | 73M                | B732                         | Direct match in EEA                                     |
+| Boeing 737-200/200 Advanced                     | 73S                | B732                         | Direct match in EEA                                     |
+| Boeing 737-300                                  | 733                | B733                         | Direct match in EEA                                     |
+| Boeing 737-300                                  | 73N                | B733                         | Direct match in EEA                                     |
+| Boeing 737-300 (winglets)                       | 73C                | B733                         | Mapped to non-optimized aircraft                        |
+| Boeing 737-400                                  | 734                | B734                         | Direct match in EEA                                     |
+| Boeing 737-400                                  | 73Q                | B734                         | Direct match in EEA                                     |
+| Boeing 737-500                                  | 735                | B735                         | Direct match in EEA                                     |
+| Boeing 737-500 (winglets)                       | 73E                | B735                         | Mapped to non-optimized aircraft                        |
+| Boeing 737-600                                  | 736                | B736                         | Direct match in EEA                                     |
+| Boeing 737-700                                  | 73G                | B737                         | Direct match in EEA                                     |
+| Boeing 737-700 (winglets)                       | 73W                |                              | Supported via correction factor derived from Piano data |
+| Boeing 737-800                                  | 738                | B738                         | Direct match in EEA                                     |
+| Boeing 737-800 (Scimitar Winglets)              | 7S8                |                              | Supported via correction factor derived from Piano data |
+| Boeing 737-800 (winglets)                       | 73H                |                              | Supported via correction factor derived from Piano data |
+| Boeing 737-900                                  | 739                | B739                         | Direct match in EEA                                     |
+| Boeing 737-900 (winglets)                       | 73J                | B739                         | Mapped to non-optimized aircraft                        |
+| Boeing 737MAX 8                                 | 7M8                |                              | Supported via correction factor derived from Piano data |
+| Boeing 737MAX 9                                 | 7M9                |                              | Supported via correction factor derived from Piano data |
+| Boeing 747                                      | 747                | B744                         | Mapped to least efficient in family                     |
+| Boeing 747 Freighter                            | 74F                | B744                         | Mapped to least efficient in family                     |
+| Boeing 747-400                                  | 744                | B744                         | Direct match in EEA                                     |
+| Boeing 747-400 Mixed                            | 74E                | B744                         | Direct match in EEA                                     |
+| Boeing 747-400F Freighter                       | 74Y                | B744                         | Direct match in EEA                                     |
+| Boeing 747-8F (Freighter)                       | 74N                | B744                         | Mapped onto older model                                 |
+| Boeing 747-8I                                   | 74H                | B744                         | Mapped onto older model                                 |
+| Boeing 757                                      | 757                | B753                         | Mapped to least efficient in family                     |
+| Boeing 757-200                                  | 752                | B752                         | Direct match in EEA                                     |
+| Boeing 757-200 (winglets)                       | 75W                |                              | Supported via correction factor derived from Piano data |
+| Boeing 757-300                                  | 753                | B753                         | Direct match in EEA                                     |
+| Boeing 757-300 (winglets)                       | 75T                | B753                         | Mapped to non-optimized aircraft                        |
+| Boeing 767                                      | 767                | B764                         | Mapped to least efficient in family                     |
+| Boeing 767-200                                  | 762                | B762                         | Direct match in EEA                                     |
+| Boeing 767-300                                  | 763                | B763                         | Direct match in EEA                                     |
+| Boeing 767-300 (winglets)                       | 76W                |                              | Supported via correction factor derived from Piano data |
+| Boeing 767-400                                  | 764                | B764                         | Direct match in EEA                                     |
+| Boeing 777                                      | 777                | B773                         | Mapped to least efficient in family                     |
+| Boeing 777 Freighter                            | 77F                | B773                         | Mapped to least efficient in family                     |
+| Boeing 777-200/200ER                            | 772                | B772                         | Direct match in EEA                                     |
+| Boeing 777-200F Freighter                       | 77X                | B772                         | Direct match in EEA                                     |
+| Boeing 777-200LR                                | 77L                | B772                         | Mapped to similar model                                 |
+| Boeing 777-300                                  | 773                | B773                         | Direct match in EEA                                     |
+| Boeing 777-300ER                                | 77W                | B77W                         | Direct match in EEA                                     |
+| Boeing 787                                      | 787                | B789                         | Mapped to least efficient in family                     |
+| Boeing 787-10                                   | 781                |                              | Supported via correction factor derived from Piano data |
+| Boeing 787-8                                    | 788                | B788                         | Direct match in EEA                                     |
+| Boeing 787-9                                    | 789                | B789                         | Direct match in EEA                                     |
+| Bombardier CS100                                | CS1                |                              | Not supported                                           |
+| Bombardier CS300                                | CS3                |                              | Not supported                                           |
+| British Aerospace 146                           | 146                | BAE146                       | Direct match in EEA                                     |
+| British Aerospace Jetstream 31/32/41            | JST                |                              | Not supported                                           |
+| British Aerospace Jetstream 32                  | J32                |                              | Not supported                                           |
+| British Aerospace Jetstream 41                  | J41                |                              | Not supported                                           |
+| Canadair Regional Jet                           | CRJ                | CS900RJ                      | Mapped to least efficient in family                     |
+| Canadair Regional Jet 100                       | CR1                |                              | Not supported                                           |
+| Canadair Regional Jet 1000                      | CRK                |                              | Not supported                                           |
+| Canadair Regional Jet 200                       | CR2                |                              | Not supported                                           |
+| Canadair Regional Jet 550                       | CR5                |                              | Supported via correction factor derived from Piano data |
+| Canadair Regional Jet 700                       | CR7                | CS700RJ                      | Direct match in EEA                                     |
+| Canadair Regional Jet 900                       | CR9                | CS900RJ                      | Direct match in EEA                                     |
+| Cessna (Light Aircraft - single engine)         | CNC                | C208                         | Direct match in EEA                                     |
+| Cessna (Light Aircraft)                         | CNA                | C208                         | Direct match in EEA                                     |
+| Cessna 208B Freighter                           | CNF                | C208                         | Direct match in EEA                                     |
+| Cessna Citation                                 | CNJ                | C500                         | Direct match in EEA                                     |
+| Comac ARJ21-700                                 | C27                |                              | Not supported                                           |
+| Convair 440/580/600/640 Freighter               | CVF                |                              | Not supported                                           |
+| De Havilland-Bombardier DHC-4 Caribou           | DHC                |                              | Not supported                                           |
+| De Havilland-Bombardier DHC-6 Twin Otter        | DHT                | DHC6                         | Direct match in EEA                                     |
+| De Havilland-Bombardier DHC-8 Dash 8            | DH8                | DHC8                         | Direct match in EEA                                     |
+| De Havilland-Bombardier DHC-8 Dash 8 Series 200 | DH2                | DHC8                         | Mapped to non-optimized aircraft                        |
+| De Havilland-Bombardier DHC-8 Dash 8 Series 300 | DH3                | DHC8                         | Mapped to non-optimized aircraft                        |
+| De Havilland-Bombardier DHC-8 Dash 8 Series 400 | DH4                | DHC8                         | Mapped to non-optimized aircraft                        |
+| Embraer 170 Regional Jet                        | E70                | E170                         | Direct match in EEA                                     |
+| Embraer 175 (Enhanced Winglets)                 | E7W                |                              | Supported via correction factor derived from Piano data |
+| Embraer 175 Regional Jet                        | E75                | E175                         | Direct match in EEA                                     |
+| Embraer 190 E2                                  | 290                | E190                         | Mapped onto older model                                 |
+| Embraer 190 Regional Jet                        | E90                | E190                         | Direct match in EEA                                     |
+| Embraer 195 E2                                  | 295                | E195                         | Mapped onto older model                                 |
+| Embraer 195 Regional Jet                        | E95                | E195                         | Direct match in EEA                                     |
+| Embraer EMB-110 Bandeirante                     | EMB                | E110                         | Direct match in EEA                                     |
+| Embraer EMB-120 Brasilia                        | EM2                | E120                         | Direct match in EEA                                     |
+| Embraer ERJ-135 Regional Jet                    | ER3                | E135                         | Direct match in EEA                                     |
+| Embraer ERJ-135/140/145 Regional Jet            | ERJ                |                              | Mapped to least efficient in family                     |
+| Embraer ERJ-140 Regional Jet                    | ERD                | E145                         | Direct match in EEA                                     |
+| Embraer ERJ-145 Regional Jet                    | ER4                | E145                         | Direct match in EEA                                     |
+| Embraer RJ-170/175/190/195 Regional Jet         | EMJ                |                              | Mapped to least efficient in family                     |
+| Fairchild (Swearingen) Metro/Merlin             | SWM                |                              | Not supported                                           |
+| Fairchild Dornier 328JET                        | FRJ                |                              | Not supported                                           |
+| Fokker 100                                      | 100                | F100                         | Direct match in EEA                                     |
+| Fokker 50                                       | F50                | F50                          | Direct match in EEA                                     |
+| Fokker 70                                       | F70                | F70                          | Direct match in EEA                                     |
+| Ilyushin IL-76                                  | IL7                | IL76                         | Direct match in EEA                                     |
+| Ilyushin IL-96-300                              | IL9                | IL96                         | Direct match in EEA                                     |
+| LET L410 Turbolet                               | L4T                | L410                         | Direct match in EEA                                     |
+| McDonnell Douglas MD-11 Freighter               | M1F                | MD11                         | Direct match in EEA                                     |
+| McDonnell Douglas MD-80                         | M80                |                              | Not supported                                           |
+| McDonnell Douglas MD-83                         | M83                |                              | Not supported                                           |
+| McDonnell Douglas MD-87                         | M87                |                              | Not supported                                           |
+| McDonnell Douglas MD-88                         | M88                |                              | Not supported                                           |
+| McDonnell Douglas MD-90                         | M90                | MD90                         | Direct match in EEA                                     |
+| Pilatus Brit-Norm BN-2A/B ISL/BN-2T             | BNI                |                              | Not supported                                           |
+| SAAB 2000                                       | S20                |                              | Not supported                                           |
+| Saab 340B                                       | SFB                |                              | Not supported                                           |
+| SAAB SF 340                                     | SF3                |                              | Not supported                                           |
+| Sukhoi Superjet 100-95                          | SU9                |                              | Not supported                                           |
+| Tupolev TU-154                                  | TU5                |                              | Not supported                                           |
+| Xian Yunshuji MA-60                             | MA6                |                              | Not supported                                           |
+| Yakovlev YAK-40                                 | YK4                |                              | Not supported                                           |
+| Yakovlev YAK-42                                 | YK2                |                              | Not supported                                           |
